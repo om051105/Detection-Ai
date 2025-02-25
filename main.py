@@ -1,48 +1,38 @@
 import cv2
-import torch
 from ultralytics import YOLO
-import threading
 
+# Load the YOLOv8 model
 model = YOLO("yolov8n.pt")
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-model.to(device)
 
+# Start webcam
 cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-cap.set(cv2.CAP_PROP_FPS, 30)
-
-def process_frame(frame):
-    return model(frame, conf=0.5, iou=0.45, imgsz=640)
 
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
 
-    thread = threading.Thread(target=process_frame, args=(frame,))
-    thread.start()
-    results = process_frame(frame)
+    # Perform object detection
+    results = model(frame)
 
-    count = 0
+    # Loop through detections
     for result in results:
         for box in result.boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = round(float(box.conf[0]), 2)
-            label = result.names[int(box.cls[0])]
+            x1, y1, x2, y2 = map(int, box.xyxy[0])  # Get bounding box coordinates
+            conf = box.conf[0]  # Confidence score
+            label = result.names[int(box.cls[0])]  # Object label
+            
+            # Change color dynamically (example: Red for people, Green for others)
+            color = (0, 0, 255) if label == "person" else (0, 255, 0)
+            
+            # Draw the bounding box with new color
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+            cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"{label} {conf}", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    cv2.imshow("YOLOv8 Object Detection", frame)
 
-            count += 1
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    cv2.putText(frame, f"Objects: {count} | FPS: {int(fps)}", (10, 50),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-    cv2.imshow("YOLOv8 Fast Object Detection", frame)
-
+    # Press 'q' to exit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
